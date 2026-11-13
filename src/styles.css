@@ -1,0 +1,1477 @@
+@source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@import "@cloudflare/kumo/styles/tailwind";
+@import "tailwindcss";
+
+/*
+ * `dark:` follows the app's mode (Kumo's data-mode), not the OS. The app is
+ * light, so without this a dark-mode Mac gets dark switches on a light page.
+ */
+@custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
+
+/*
+ * Code uses Berkeley Mono when it is installed on the system (never
+ * downloaded), then the platform's own mono font.
+ */
+@theme {
+  --font-mono:
+    "Berkeley Mono", "TX-02", ui-monospace, "SF Mono", SFMono-Regular, Menlo,
+    Monaco, "Cascadia Code", Consolas, "Liberation Mono", monospace;
+}
+
+@layer base {
+  * {
+    scrollbar-color: var(--color-kumo-interact) transparent;
+    scrollbar-width: thin;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Tailwind v4's preflight gives buttons the default arrow; clickable
+     things here should say so. Disabled ones keep the arrow. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="option"],
+  [role="menuitem"],
+  [role="tab"],
+  select:not(:disabled),
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+
+  html {
+    font-family:
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      Roboto,
+      "Helvetica Neue",
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html,
+  body {
+    height: var(--screen-h);
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* No double-tap zoom delay on anything pressable. */
+  a,
+  button,
+  [role="button"],
+  summary,
+  label {
+    touch-action: manipulation;
+  }
+
+  /* iOS zooms the page into any field smaller than 16px. */
+  @media (pointer: coarse) {
+    input,
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
+
+  /* Installed, it behaves like an app: no link previews on long press. */
+  @media (display-mode: standalone) {
+    a,
+    button {
+      -webkit-touch-callout: none;
+      user-select: none;
+    }
+  }
+}
+
+/*
+ * The app fills the part of the screen the keyboard leaves. --app-h and
+ * --app-top come from lib/viewport.ts; iOS slides the visible area over the
+ * page instead of resizing it, so the app has to follow.
+ */
+.app-root {
+  height: var(--app-h, var(--screen-h));
+  transform: translateY(var(--app-top, 0px));
+}
+
+/*
+ * Continues the iOS launch image: the same robot, the same place. The offsets
+ * are where robot-heads puts its canvas around the head, so the two line up.
+ * Hidden unless installed, for the server's first paint.
+ */
+.launch-splash {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 100;
+  display: none;
+  height: var(--screen-h);
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  transition: opacity 300ms ease-out;
+}
+
+@media (display-mode: standalone) and (max-width: 767.98px) {
+  .launch-splash {
+    display: flex;
+  }
+}
+
+.launch-splash[data-leaving="true"] {
+  opacity: 0;
+}
+
+.launch-splash-box {
+  position: relative;
+  width: 140px;
+  height: 140px;
+}
+
+.launch-splash-box img {
+  position: absolute;
+  top: -39px;
+  left: -7px;
+  width: 154px;
+  max-width: none;
+  height: 191px;
+}
+
+.app-main {
+  padding-top: var(--top-clear);
+  padding-right: var(--safe-right);
+  padding-left: var(--safe-left);
+}
+
+/* Hugeicons: a 1.5px stroke on screen whatever the icon's size. */
+.hi [stroke-width] {
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Markdown inside chat bubbles: tighter than Streamdown's document defaults. */
+.bubble-prose > *:first-child {
+  margin-top: 0;
+}
+
+.bubble-prose > *:last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * Kumo's primary button, recoloured to ink for chat actions (send, take over).
+ * Button derives its fill, gradient and ring from the brand colour inline.
+ */
+.btn-ink {
+  --color-kumo-brand: var(--color-kumo-contrast);
+}
+
+/*
+ * Softer lines than Kumo's default (10% ink), so cards, dividers and inputs
+ * separate without drawing hard edges. Unlayered, so it wins over the theme.
+ */
+:root {
+  --color-kumo-line: light-dark(oklch(0% 0 0 / 0.06), oklch(100% 0 0 / 0.08));
+
+  /* Translucent fills that read the same on the canvas and on white. */
+  --fill-hover: light-dark(oklch(0% 0 0 / 0.045), oklch(100% 0 0 / 0.07));
+  --fill-active: light-dark(oklch(0% 0 0 / 0.07), oklch(100% 0 0 / 0.11));
+}
+
+/*
+ * Layout grid. Every column (sidebar, chat, side panel) starts with a
+ * --header-h row whose --control-size controls sit --inset from each edge
+ * on all four sides, so the three top rows share one centre line. The
+ * composer row is --footer-h tall; the sidebar footer is a --header-h row
+ * like the search bar above it.
+ */
+:root {
+  --header-h: 56px;
+  --control-size: 36px;
+  --inset: 10px;
+  --footer-h: 80px;
+
+  /* Notch and home bar. The keyboard covers the home bar, so it goes to 0. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  /* The whole screen. lib/viewport.ts corrects it once scripts run. */
+  --screen-h: 100dvh;
+
+  /* Where the app's top edge starts. See the installed-on-iOS rule below. */
+  --top-clear: var(--safe-top);
+}
+
+/*
+ * Installed on iOS, with the app drawn under the status bar, 100dvh comes up
+ * short by that bar, leaving a band at the bottom of the screen. iOS also
+ * fades what sits just below the bar, so the app starts further down.
+ */
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: standalone) {
+    :root {
+      --screen-h: calc(100dvh + var(--safe-top));
+      --top-clear: calc(var(--safe-top) + 16px);
+    }
+  }
+}
+
+:root[data-keyboard] {
+  --safe-bottom: 0px;
+}
+
+/* Fingers need bigger targets. --inset shrinks so the row stays 56px tall. */
+@media (pointer: coarse) {
+  :root {
+    --control-size: 44px;
+    --inset: 6px;
+  }
+}
+
+@layer components {
+  .col-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
+    height: var(--header-h);
+    padding-inline: var(--inset);
+  }
+
+  /* The one icon button: round, quiet until hovered, tinted when pressed. */
+  .icon-btn {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-size);
+    height: var(--control-size);
+    border-radius: 9999px;
+    color: var(--text-color-kumo-subtle);
+    outline: none;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      transform 160ms ease-out;
+  }
+
+  .icon-btn:hover,
+  .icon-btn[aria-pressed="true"],
+  .icon-btn[aria-expanded="true"] {
+    background-color: var(--fill-hover);
+    color: var(--text-color-kumo-default);
+  }
+
+  .icon-btn[aria-pressed="true"] {
+    background-color: var(--fill-active);
+  }
+
+  .icon-btn:focus-visible {
+    box-shadow: 0 0 0 2px var(--color-kumo-focus);
+  }
+
+  .icon-btn:active {
+    transform: scale(0.96);
+  }
+
+  .icon-btn:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  /* A filled variant for the composer's + and other primary-ish actions. */
+  .icon-btn.is-filled {
+    background-color: var(--fill-hover);
+    color: var(--text-color-kumo-default);
+  }
+
+  .icon-btn.is-filled:hover {
+    background-color: var(--fill-active);
+  }
+}
+
+/*
+ * Motion tokens (transitions.dev scale). Components reference these instead
+ * of hardcoding durations and curves.
+ */
+:root {
+  --duration-stagger: 40ms;
+  --duration-micro: 80ms;
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-medium: 350ms;
+  --duration-slow: 400ms;
+  --duration-very-slow: 500ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --blur-small: 2px;
+  --blur-medium: 3px;
+
+  /* Side panels and the bot sidebar */
+  --panel-open-dur: var(--duration-slow);
+  --panel-close-dur: var(--duration-medium);
+  --panel-ease: var(--ease-smooth-out);
+  --panel-travel: 24px;
+  --panel-blur: var(--blur-small);
+
+  /* Shimmer text (thinking / typing labels) */
+  --shimmer-dur: 2000ms;
+  --shimmer-highlight: var(--text-color-kumo-default);
+  --shimmer-band: 400%;
+
+  /* Icon swap (send ↔ stop) */
+  --icon-swap-dur: var(--duration-fast);
+  --icon-swap-start-scale: 0.25;
+
+  /* Tabs sliding (segmented control) */
+  --tabs-dur: var(--duration-fast);
+  --tabs-ease: var(--ease-smooth-out);
+  --tabs-text-muted: var(--text-color-kumo-subtle);
+  --tabs-text-active: var(--text-color-kumo-default);
+  --tabs-bar-bg: var(--color-kumo-tint);
+  --tabs-pill-bg: var(--color-kumo-base);
+
+  /* Accordion expand (activity rows) */
+  --acc-expand: var(--duration-fast);
+  --acc-collapse: var(--duration-fast);
+  --acc-chevron: var(--duration-fast);
+  --acc-ease: var(--ease-smooth-out);
+}
+
+/* Accordion: grid-template-rows 0fr → 1fr, no JS height measuring. */
+/* A scroller that fades out at the bottom while there is more below it. */
+@property --scroll-fade {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+.scroll-fade {
+  mask-image: linear-gradient(
+    to bottom,
+    black calc(100% - var(--scroll-fade)),
+    transparent
+  );
+  transition: --scroll-fade 150ms ease-out;
+}
+.scroll-fade[data-more="true"] {
+  --scroll-fade: 56px;
+}
+
+.t-acc-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--acc-collapse) var(--acc-ease);
+}
+.t-acc[data-open="true"] .t-acc-panel {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--acc-expand) var(--acc-ease);
+}
+.t-acc-panel-inner {
+  overflow: hidden;
+  opacity: 0;
+  filter: blur(2px);
+  transition:
+    opacity var(--acc-collapse) var(--acc-ease),
+    filter var(--acc-collapse) var(--acc-ease);
+}
+.t-acc[data-open="true"] .t-acc-panel-inner {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity var(--acc-expand) var(--acc-ease),
+    filter var(--acc-expand) var(--acc-ease);
+}
+.t-acc-chevron {
+  display: inline-flex;
+  transform: scaleY(1);
+  transform-origin: center;
+  transition: transform var(--acc-chevron) var(--acc-ease);
+}
+.t-acc-chevron path {
+  vector-effect: non-scaling-stroke;
+}
+.t-acc[data-open="true"] .t-acc-chevron {
+  transform: scaleY(-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-acc-panel,
+  .t-acc-panel-inner,
+  .t-acc-chevron {
+    transition: none !important;
+  }
+}
+
+/*
+ * Pipeline runs. A run's steps share one surface, joined by a rail through
+ * their faces like the editor's flow. The one being worked on sits on a
+ * tint that slides to the next row (transform + height, placed from script
+ * like the tabs pill). Marks that land while the page is open pop in;
+ * marks already there on load do not.
+ */
+/* Radii nest: the run's shell is 24px with 8px padding, so this is 16px;
+   with 4px padding, the rows and their highlight are 12px. */
+.run-steps {
+  padding: 4px;
+  border-radius: 16px;
+  background: var(--color-kumo-base);
+  box-shadow:
+    0 0 0 1px var(--color-kumo-line),
+    0 1px 2px oklch(0 0 0 / 0.04),
+    0 2px 8px oklch(0 0 0 / 0.04);
+}
+
+.step-row {
+  position: relative;
+}
+
+/* Rail segments run through the node's center (12px pad + 14px), stopping
+   just short of the face. An expanded row's segment carries on down beside
+   its output. */
+.step-rail {
+  position: absolute;
+  left: 25.25px;
+  width: 1.5px;
+  border-radius: 1px;
+  background: var(--color-kumo-line);
+  transition: background-color var(--duration-slow) var(--ease-smooth-out);
+}
+.step-rail[data-on="true"] {
+  background: color-mix(
+    in oklch,
+    var(--text-color-kumo-subtle) 45%,
+    transparent
+  );
+}
+.step-rail-in {
+  top: 0;
+  height: 9px;
+}
+.step-rail-out {
+  top: 43px;
+  bottom: 0;
+}
+
+/* A folded step output fades out instead of stopping at a hard edge. */
+.fold-fade {
+  mask-image: linear-gradient(to bottom, black calc(100% - 48px), transparent);
+}
+
+/* A tint behind the row being worked on; it slides to the next one. */
+.step-highlight {
+  position: absolute;
+  inset-inline: 4px;
+  top: 0;
+  border-radius: 12px;
+  pointer-events: none;
+  background: var(--fill-hover);
+  opacity: 0;
+  transition:
+    transform var(--duration-slow) var(--ease-smooth-out),
+    height var(--duration-slow) var(--ease-smooth-out),
+    opacity var(--duration-fast) var(--ease-smooth-out);
+}
+
+.step-highlight[data-shown="true"] {
+  opacity: 1;
+}
+
+/*
+ * A run card opens like the accordion above, but its rules reach only its
+ * own panel and chevron: the step rows inside are accordions too.
+ */
+.run-acc > .run-acc-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--acc-collapse) var(--acc-ease);
+}
+.run-acc[data-open="true"] > .run-acc-panel {
+  grid-template-rows: 1fr;
+  transition-duration: var(--acc-expand);
+}
+.run-acc > .run-acc-panel > .run-acc-inner {
+  overflow: hidden;
+  /* Room for the step capsules' outline and shadow, which would otherwise
+     be clipped at the edges. The margin gives it back, so nothing moves;
+     closed, the inner is transparent, so the extra 8px never shows. */
+  margin: 0 -8px -8px;
+  padding: 0 8px 8px;
+  opacity: 0;
+  filter: blur(var(--blur-small));
+  transition:
+    opacity var(--acc-collapse) var(--acc-ease),
+    filter var(--acc-collapse) var(--acc-ease);
+}
+.run-acc[data-open="true"] > .run-acc-panel > .run-acc-inner {
+  opacity: 1;
+  filter: blur(0);
+  transition-duration: var(--acc-expand);
+}
+.run-acc-chevron {
+  display: inline-flex;
+  transition: transform var(--acc-chevron) var(--acc-ease);
+}
+.run-acc[data-open="true"] > div > button .run-acc-chevron {
+  transform: scaleY(-1);
+}
+
+.step-spin {
+  animation: step-spin 1s linear infinite;
+}
+
+@keyframes step-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.progress-arc {
+  transition: stroke-dashoffset var(--duration-slow) var(--ease-smooth-out);
+}
+
+.pipeline-runs[data-live] .step-done {
+  transition:
+    transform var(--duration-very-slow) var(--ease-bounce),
+    opacity var(--duration-fast) var(--ease-smooth-out),
+    filter var(--duration-fast) var(--ease-smooth-out);
+
+  @starting-style {
+    transform: scale(0.4);
+    opacity: 0;
+    filter: blur(var(--blur-small));
+  }
+}
+
+/* A message opened from a pipeline step glows once. */
+[data-flash] {
+  border-radius: 20px;
+  animation: flash 1.6s var(--ease-smooth-out);
+}
+
+/* The spread paints past the edges without moving the layout. */
+@keyframes flash {
+  0%,
+  30% {
+    background: var(--fill-hover);
+    box-shadow: 0 0 0 10px var(--fill-hover);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-highlight,
+  .progress-arc,
+  .run-acc-panel,
+  .run-acc-inner,
+  .run-acc-chevron,
+  .pipeline-runs[data-live] .step-done {
+    transition: none !important;
+  }
+
+  .step-spin,
+  [data-flash] {
+    animation: none !important;
+  }
+}
+
+/*
+ * Split views (sidebar | main, thread | panel), built on
+ * react-resizable-panels. Opening and closing resize the panel; while that
+ * happens the group carries data-animating so flex-grow eases, and the
+ * content inside keeps its open width and slides, fades and un-blurs.
+ * Dragging the line resizes without animation. Closing is faster.
+ */
+.split-view[data-animating] > [data-panel] {
+  transition: flex-grow var(--panel-open-dur) var(--panel-ease);
+}
+
+.split-view[data-animating="close"] > [data-panel] {
+  transition-duration: var(--panel-close-dur);
+}
+
+.split-content {
+  width: var(--split-width);
+  height: 100%;
+  flex-shrink: 0;
+  opacity: 0;
+  filter: blur(var(--panel-blur));
+  transform: translateX(calc(var(--panel-travel) * var(--split-from)));
+  transition:
+    transform var(--panel-close-dur) var(--panel-ease),
+    opacity var(--panel-close-dur) var(--panel-ease),
+    filter var(--panel-close-dur) var(--panel-ease);
+}
+
+.split-content[data-side="left"] {
+  --split-from: -1;
+}
+
+.split-content[data-side="right"] {
+  --split-from: 1;
+}
+
+.split-content[data-open="true"] {
+  opacity: 1;
+  filter: blur(0);
+  transform: translateX(0);
+  transition-duration: var(--panel-open-dur);
+}
+
+/*
+ * On a phone the main panel takes the whole group and the side panel opens
+ * as a sheet. This is CSS so it also holds for the server's first paint,
+ * before anything can measure the screen.
+ */
+@media (max-width: 767.98px) {
+  .split-view > [data-panel] {
+    flex: 1 1 100% !important;
+  }
+
+  .split-view > [id$="-panel"],
+  .split-view > .resize-handle {
+    display: none !important;
+  }
+}
+
+/*
+ * Sheets (components/sheet.tsx): the sidebar as a drawer from the left, side
+ * panels as a bottom sheet with two detents. Base UI sets the --drawer-*
+ * variables as the finger moves, and data-swiping turns the easing off.
+ */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  min-height: var(--screen-h);
+  background: oklch(0 0 0 / 0.32);
+  opacity: calc(1 - var(--drawer-swipe-progress));
+  transition: opacity var(--panel-open-dur) var(--panel-ease);
+}
+
+/* Progress reaches 1 at the lower detent, where the page must still dim. */
+.sheet-backdrop[data-side="right"] {
+  opacity: calc(1 - 0.6 * var(--drawer-swipe-progress));
+}
+
+/* iOS: fixed stops short of the screen's bottom edge. */
+@supports (-webkit-touch-callout: none) {
+  .sheet-backdrop {
+    position: absolute;
+  }
+}
+
+.sheet-backdrop[data-starting-style],
+.sheet-backdrop[data-ending-style] {
+  opacity: 0;
+}
+
+.sheet-backdrop[data-swiping] {
+  transition-duration: 0ms;
+}
+
+.sheet-viewport {
+  position: fixed;
+  inset: 0 0 auto;
+  height: var(--screen-h);
+  display: flex;
+  touch-action: none;
+}
+
+.sheet-viewport[data-side="right"] {
+  align-items: flex-end;
+}
+
+.sheet-popup {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+  background: var(--color-kumo-canvas);
+  touch-action: none;
+  transition: transform var(--panel-open-dur) var(--panel-ease);
+}
+
+.sheet-popup[data-ending-style] {
+  transition-duration: calc(
+    var(--drawer-swipe-strength) * var(--panel-close-dur)
+  );
+}
+
+.sheet-popup[data-swiping] {
+  user-select: none;
+  transition-duration: 0ms;
+}
+
+.sheet-popup[data-side="left"] {
+  width: min(84vw, 320px);
+  height: 100%;
+  padding: var(--top-clear) 0 var(--safe-bottom) var(--safe-left);
+  border-radius: 0 20px 20px 0;
+  box-shadow: 0 0 32px oklch(0 0 0 / 0.16);
+  transform: translateX(var(--drawer-swipe-movement-x));
+}
+
+.sheet-popup[data-side="left"][data-starting-style],
+.sheet-popup[data-side="left"][data-ending-style] {
+  transform: translateX(calc(-100% - 32px));
+}
+
+/* The padding keeps the bottom of the content on screen at the lower detent. */
+.sheet-popup[data-side="right"] {
+  width: 100%;
+  height: calc(var(--screen-h) - var(--top-clear) - 8px);
+  padding-bottom: max(
+    0px,
+    calc(var(--drawer-snap-point-offset) + var(--drawer-swipe-movement-y))
+  );
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 32px oklch(0 0 0 / 0.12);
+  transform: translateY(
+    calc(var(--drawer-snap-point-offset) + var(--drawer-swipe-movement-y))
+  );
+}
+
+.sheet-popup[data-side="right"][data-starting-style],
+.sheet-popup[data-side="right"][data-ending-style] {
+  padding-bottom: 0;
+  transform: translateY(calc(100% + 2px));
+}
+
+/* The bar is thin; the row around it is what a thumb catches. */
+.sheet-handle {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+}
+
+.sheet-handle::before {
+  content: "";
+  width: 36px;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--fill-active);
+}
+
+.sheet-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  touch-action: auto;
+}
+
+.sheet-popup[data-side="right"] .sheet-content {
+  padding-bottom: var(--safe-bottom);
+}
+
+/* Below the header, so it never covers the sidebar button. */
+.sheet-swipe-area {
+  position: fixed;
+  top: calc(var(--top-clear) + var(--header-h));
+  bottom: 0;
+  left: 0;
+  width: 20px;
+}
+
+/*
+ * Sidebar views (bots | pipelines) side by side on a track that slides.
+ * A finger drags it via --drag (set from script, with data-dragging so it
+ * follows without easing); letting go eases it to the chosen view. The view
+ * off to the side dims, so the one coming in reads as arriving.
+ */
+:root {
+  --sidebar-slide-dur: var(--duration-medium);
+  --sidebar-slide-ease: var(--ease-smooth-out);
+}
+
+.sidebar-views {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  /* Sideways swipes switch views, never browser history. */
+  overscroll-behavior-x: contain;
+}
+
+.sidebar-track {
+  display: flex;
+  width: 100%;
+  transform: translateX(calc(var(--view, 0) * -100% + var(--drag, 0px)));
+  transition: transform var(--sidebar-slide-dur) var(--sidebar-slide-ease);
+  will-change: transform;
+}
+
+.sidebar-track[data-dragging] {
+  transition: none;
+}
+
+.sidebar-view {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 100%;
+  flex-direction: column;
+  /* Vertical scrolling stays native; sideways goes to the swipe. */
+  touch-action: pan-y;
+  transition: opacity var(--sidebar-slide-dur) var(--sidebar-slide-ease);
+}
+
+.sidebar-view[inert] {
+  opacity: 0.4;
+}
+
+/*
+ * The line between panels. Hovering shows a grip on the line at the
+ * pointer's height (--grip-y, set from script); it follows while dragging.
+ */
+.resize-handle {
+  position: relative;
+  z-index: 10;
+  width: 1px;
+  background: var(--color-kumo-line);
+  outline: none;
+}
+
+.resize-handle[data-separator="disabled"] {
+  background: transparent;
+}
+
+.resize-grip {
+  position: absolute;
+  top: var(--grip-y, 50%);
+  left: 50%;
+  width: 4px;
+  height: 28px;
+  border-radius: 999px;
+  background: light-dark(oklch(0% 0 0 / 0.28), oklch(100% 0 0 / 0.32));
+  box-shadow: 0 0 0 2px var(--color-kumo-base);
+  opacity: 0;
+  transform: translate(-50%, -50%) scaleY(0.6);
+  transition:
+    opacity 150ms ease,
+    transform 150ms var(--ease-smooth-out),
+    background-color 150ms ease;
+  pointer-events: none;
+}
+
+.resize-handle:is(
+    [data-separator="hover"],
+    [data-separator="active"],
+    [data-separator="focus"]
+  )
+  .resize-grip {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+
+.resize-handle[data-separator="active"] .resize-grip {
+  background: light-dark(oklch(0% 0 0 / 0.5), oklch(100% 0 0 / 0.55));
+}
+
+/*
+ * Composer island. One row (+, field, send) while empty; it opens into a
+ * card with attachment previews on top, the field across the full width and
+ * the buttons underneath. The same elements move between grid areas, so the
+ * field keeps focus. Height eases, anchored to the bottom so it grows up.
+ */
+.composer {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  border-radius: 24px;
+  background: var(--color-kumo-base);
+  box-shadow:
+    0 0 0 1px var(--color-kumo-line),
+    0 1px 2px oklch(0 0 0 / 0.04),
+    0 4px 12px oklch(0 0 0 / 0.04);
+  transition:
+    height var(--duration-fast) var(--ease-smooth-out),
+    box-shadow var(--duration-quick) ease;
+}
+
+/* Focus: a slightly firmer edge and a softer lift, not a ring. */
+.composer:focus-within {
+  box-shadow:
+    0 0 0 1px light-dark(oklch(0 0 0 / 0.12), oklch(1 0 0 / 0.16)),
+    0 1px 2px oklch(0 0 0 / 0.04),
+    0 6px 20px oklch(0 0 0 / 0.07);
+}
+
+.composer[data-dragging] {
+  box-shadow:
+    0 0 0 1.5px light-dark(oklch(0 0 0 / 0.22), oklch(1 0 0 / 0.28)),
+    0 8px 24px oklch(0 0 0 / 0.08);
+}
+
+/* 36px buttons and a one-line field sit 6px inside a 48px pill. */
+.composer-grid {
+  display: grid;
+  flex-shrink: 0;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "plus field send";
+  align-items: end;
+  column-gap: 8px;
+  padding: 6px;
+}
+
+.composer[data-expanded="true"] .composer-grid {
+  grid-template-areas:
+    "strip strip strip"
+    "field field field"
+    "plus . send";
+  row-gap: 6px;
+  padding: 8px;
+}
+
+/* The buttons grow for fingers; the one-line field stays between them. */
+@media (pointer: coarse) {
+  .composer-grid {
+    padding: 4px;
+  }
+
+  .composer[data-expanded="false"] .composer-field {
+    margin-block: 4px;
+  }
+
+  .composer-send > button {
+    width: var(--control-size);
+    height: var(--control-size);
+  }
+}
+
+.composer-plus {
+  grid-area: plus;
+}
+
+.composer-send {
+  grid-area: send;
+}
+
+.composer-field {
+  grid-area: field;
+  max-height: 200px;
+  resize: none;
+  background: transparent;
+  padding: 6px;
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--text-color-kumo-default);
+  outline: none;
+}
+
+.composer-field::placeholder {
+  color: var(--text-color-kumo-placeholder);
+}
+
+.composer[data-expanded="true"] .composer-field {
+  padding: 4px 8px 0;
+}
+
+.composer-strip {
+  grid-area: strip;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Room for the remove buttons' focus rings. */
+  margin: -4px;
+  padding: 4px;
+}
+
+/* Inner radius 16 = the island's 24 minus its 8px padding. */
+.composer-card {
+  position: relative;
+  flex-shrink: 0;
+  width: 120px;
+  height: 104px;
+  transition:
+    transform var(--duration-fast) var(--ease-bounce),
+    opacity var(--duration-quick) ease;
+
+  @starting-style {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+.composer-card-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--fill-hover);
+  padding: 12px;
+  text-align: left;
+  color: var(--text-color-kumo-default);
+  outline: none;
+  transition: transform 160ms ease-out;
+  padding-bottom: 8px;
+}
+
+.composer-card-body:active {
+  transform: scale(0.97);
+}
+
+.composer-card-body:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-kumo-focus);
+}
+
+/* Images fill the card on their own. */
+.composer-card-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.composer-card-body::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.06);
+  pointer-events: none;
+}
+
+.composer-card-label {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* An image keeps its photo while it uploads, dimmed under a spinner. */
+.composer-card[data-status="uploading"] .composer-card-img {
+  opacity: 0.55;
+}
+
+.composer-card-spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.composer-card-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--color-kumo-base) 85%, transparent);
+  color: var(--text-color-kumo-default);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.12);
+  outline: none;
+  transition:
+    transform 160ms ease-out,
+    background-color 150ms ease;
+}
+
+.composer-card-remove:hover {
+  background: var(--color-kumo-base);
+}
+
+/* With a pointer, remove appears on the card's hover or keyboard focus.
+   Touch screens can't hover, so they keep it visible. */
+@media (hover: hover) {
+  .composer-card-remove {
+    opacity: 0;
+    scale: 0.8;
+    transition:
+      opacity var(--duration-quick) ease,
+      scale var(--duration-quick) var(--ease-smooth-out),
+      transform 160ms ease-out,
+      background-color 150ms ease;
+  }
+
+  .composer-card:hover .composer-card-remove,
+  .composer-card:focus-within .composer-card-remove {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+.composer-card-remove:active {
+  transform: scale(0.9);
+}
+
+.composer-card-remove:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-kumo-focus);
+}
+
+/* Shimmer: a highlight band sweeps across muted text while work runs. */
+.t-shimmer {
+  position: relative;
+  display: inline-block;
+}
+
+.t-shimmer::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--shimmer-highlight) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: var(--shimmer-band) 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t-shimmer var(--shimmer-dur) linear infinite;
+}
+
+@keyframes t-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+/* Icon swap: two icons share one slot and cross-fade with blur + scale. */
+.t-icon-swap {
+  display: inline-grid;
+}
+
+.t-icon-swap .t-icon {
+  grid-area: 1 / 1;
+  transition:
+    opacity var(--icon-swap-dur) ease-in-out,
+    filter var(--icon-swap-dur) ease-in-out,
+    transform var(--icon-swap-dur) ease-in-out;
+}
+
+.t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
+.t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
+  opacity: 0;
+  filter: blur(var(--blur-small));
+  transform: scale(var(--icon-swap-start-scale));
+}
+
+/* Tabs sliding: the active pill tweens between measured tab positions. */
+.t-tabs {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 48px;
+  background: var(--tabs-bar-bg);
+}
+.t-tab {
+  position: relative;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  height: 30px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tabs-text-muted);
+  cursor: pointer;
+  border-radius: 48px;
+  outline: none;
+  z-index: 1;
+  transition: color var(--tabs-dur) var(--tabs-ease);
+}
+.t-tab:not([aria-selected="true"]):hover,
+.t-tab[aria-selected="true"] {
+  color: var(--tabs-text-active);
+}
+.t-tab:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-kumo-focus);
+}
+
+.t-tabs-pill {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  height: 30px;
+  width: 0;
+  background: var(--tabs-pill-bg);
+  border-radius: 48px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+  transform: translateX(0);
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width var(--tabs-dur) var(--tabs-ease);
+  will-change: transform, width;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* New messages rise in; history already on screen does not replay. */
+.msg-enter {
+  transition:
+    opacity var(--duration-fast) var(--ease-smooth-out),
+    transform var(--duration-fast) var(--ease-smooth-out),
+    filter var(--duration-fast) var(--ease-smooth-out);
+
+  @starting-style {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+    filter: blur(var(--blur-small));
+  }
+}
+
+.msg-enter[data-from="user"] {
+  transform-origin: bottom right;
+}
+
+.msg-enter[data-from="bot"] {
+  transform-origin: bottom left;
+}
+
+/* Unread dot pops in with a small overshoot. */
+.unread-dot {
+  transition:
+    transform var(--duration-very-slow) var(--ease-bounce),
+    opacity var(--duration-fast) ease-out;
+
+  @starting-style {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+}
+
+/* Staggered reveal for headline + supporting copy (onboarding). */
+.reveal > * {
+  transition:
+    opacity var(--duration-very-slow) var(--ease-smooth-out),
+    transform var(--duration-very-slow) var(--ease-smooth-out),
+    filter var(--duration-very-slow) var(--ease-smooth-out);
+  transition-delay: calc(var(--i, 0) * 60ms);
+
+  @starting-style {
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(var(--blur-medium));
+  }
+}
+
+/* Anything pressable scales down a touch so it feels like it heard you. */
+.pressable {
+  transition:
+    transform 160ms ease-out,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.pressable:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .split-view > [data-panel],
+  .split-content,
+  .sidebar-track,
+  .sidebar-view,
+  .resize-grip,
+  .composer,
+  .composer-card,
+  .t-icon-swap .t-icon,
+  .t-tabs-pill,
+  .t-tab,
+  .msg-enter,
+  .unread-dot,
+  .reveal > * {
+    transition: none !important;
+  }
+
+  .split-content {
+    transform: none !important;
+    filter: none !important;
+  }
+
+  .t-shimmer::before {
+    animation: none !important;
+  }
+
+  .pressable:active,
+  .icon-btn:active {
+    transform: none;
+  }
+}
+
+/*
+ * Kumo's Tooltip adds `cursor-default` to whatever it wraps, so every icon
+ * button with a tooltip lost its pointer. An enabled button or link is
+ * clickable whatever wraps it; this outranks the utility (element +
+ * class beats class alone in the same layer).
+ */
+@layer utilities {
+  button.cursor-default:not(:disabled),
+  a[href].cursor-default {
+    cursor: pointer;
+  }
+}
+
+/* Models page: a test reply lands like a message bubble. */
+.model-test-result {
+  background: var(--fill-hover);
+  transform-origin: top left;
+  animation: model-test-in 320ms var(--ease-smooth-out) both;
+}
+
+.model-test-result[data-ok="false"] {
+  background: var(--color-kumo-danger-tint);
+  color: var(--color-kumo-danger);
+}
+
+@keyframes model-test-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+    filter: blur(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-test-result {
+    animation: none;
+  }
+}
+
+/*
+ * Desk. Cards rise in (staggered on first paint) and fold away when they
+ * close, wherever that happened: usePresence keeps a closed card on screen
+ * for one exit. A card the user just answered holds its check mark for
+ * --exit-delay first.
+ */
+.desk-item {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows var(--duration-medium) var(--ease-smooth-out),
+    opacity var(--duration-fast) var(--ease-smooth-out),
+    transform var(--duration-medium) var(--ease-smooth-out),
+    filter var(--duration-fast) var(--ease-smooth-out);
+  transition-delay: calc(min(var(--i, 0), 8) * var(--duration-stagger));
+
+  @starting-style {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+    filter: blur(var(--blur-small));
+  }
+}
+
+.desk-item > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.desk-item[data-exiting="true"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: scale(0.97);
+  filter: blur(var(--blur-small));
+  transition-delay: var(--exit-delay, 0ms);
+  pointer-events: none;
+}
+
+/* "Approved" lands with a small overshoot. */
+.desk-check {
+  animation: desk-check-in var(--duration-very-slow) var(--ease-bounce) both;
+}
+
+@keyframes desk-check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+/* A long finding opens to its measured height. */
+.desk-clamp {
+  overflow: hidden;
+  transition: max-height var(--duration-medium) var(--ease-smooth-out);
+}
+
+.desk-clamp[data-open="false"] {
+  mask-image: linear-gradient(to bottom, black 55%, transparent);
+}
+
+/* The undo bar rises from the bottom edge. */
+.desk-toast {
+  transition:
+    opacity var(--duration-fast) var(--ease-smooth-out),
+    transform var(--duration-fast) var(--ease-smooth-out),
+    filter var(--duration-fast) var(--ease-smooth-out);
+
+  @starting-style {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+    filter: blur(var(--blur-small));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desk-item,
+  .desk-clamp,
+  .desk-toast {
+    transition: none !important;
+  }
+
+  .desk-check {
+    animation: none;
+  }
+}
+
+/* Shopping: placeholders while stores are searched. */
+.shop-skeleton {
+  background: var(--fill-hover);
+  animation: shop-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes shop-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* A checkout that just went through. */
+.shop-paid {
+  animation: shop-paid-in var(--duration-medium) var(--ease-bounce);
+}
+
+@keyframes shop-paid-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+    filter: blur(var(--blur-small));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shop-skeleton,
+  .shop-paid {
+    animation: none;
+  }
+}
